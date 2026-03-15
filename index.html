@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D to 2D Converter</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='14' height='14' x='1' y='1' rx='2' fill='%2358a6ff'/></svg>">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+</head>
+<body>
+  <!-- Header -->
+  <header id="app-header">
+    <a href="https://www.youtube.com/@studioigor" target="_blank" rel="noopener" class="header-brand">
+      <span class="brand-icon"></span>
+      <span class="brand-text">
+        <span id="app-title" class="brand-title"></span>
+        <span id="studio-link" class="brand-sub"></span>
+      </span>
+    </a>
+    <button id="btn-lang" class="btn-icon" title="Language">EN / RU</button>
+  </header>
+
+  <!-- Main Layout -->
+  <main id="app-main">
+    <!-- Left: Viewport + Toolbar -->
+    <div id="viewport-column">
+    <div id="viewport-container">
+      <div id="drop-zone" class="drop-zone">
+        <div class="drop-zone-content">
+          <div class="drop-zone-border">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+            <p id="drop-text"></p>
+            <p id="drop-hint"></p>
+            <button id="btn-browse" class="btn-primary"></button>
+          </div>
+        </div>
+        <input type="file" id="file-input" accept=".glb,.gltf,.fbx,.zip" hidden>
+      </div>
+
+      <canvas id="viewport-canvas"></canvas>
+
+      <!-- Square render frame overlay -->
+      <div id="render-frame" class="render-frame" hidden>
+        <div class="render-frame-border"></div>
+      </div>
+
+    </div>
+
+    <!-- Camera presets toolbar -->
+    <div id="camera-presets" class="camera-presets" hidden>
+      <button data-angle="0" class="preset-btn" data-i18n="angleFront"></button>
+      <button data-angle="45" class="preset-btn" data-i18n="angleFrontRight"></button>
+      <button data-angle="90" class="preset-btn" data-i18n="angleRight"></button>
+      <button data-angle="135" class="preset-btn" data-i18n="angleBackRight"></button>
+      <button data-angle="180" class="preset-btn" data-i18n="angleBack"></button>
+      <button data-angle="225" class="preset-btn" data-i18n="angleBackLeft"></button>
+      <button data-angle="270" class="preset-btn" data-i18n="angleLeft"></button>
+      <button data-angle="315" class="preset-btn" data-i18n="angleFrontLeft"></button>
+      <button data-angle="top" class="preset-btn" data-i18n="angleTop"></button>
+    </div>
+    </div><!-- /viewport-column -->
+
+    <!-- Right: Controls Panel -->
+    <aside id="controls-panel" hidden>
+      <!-- File Info -->
+      <section class="panel-section" id="file-info-section">
+        <div class="file-info">
+          <span id="file-name"></span>
+          <button id="btn-reset" class="btn-small btn-danger" data-i18n="reset"></button>
+        </div>
+      </section>
+
+      <!-- Animation Preview -->
+      <details class="panel-section" id="animation-section" open>
+        <summary data-i18n="animationPreview"></summary>
+        <div class="section-body">
+          <div class="form-group">
+            <label data-i18n="animation"></label>
+            <select id="animation-select"></select>
+          </div>
+          <div class="row">
+            <button id="btn-play-pause" class="btn-small">
+              <span id="play-icon">&#9654;</span>
+              <span id="pause-icon" style="display:none">&#9646;&#9646;</span>
+            </button>
+            <div class="slider-group">
+              <label data-i18n="speed"></label>
+              <input type="range" id="speed-slider" min="0.1" max="3" step="0.1" value="1">
+              <span id="speed-readout">1.0x</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Camera -->
+      <details class="panel-section" id="camera-section" open>
+        <summary data-i18n="camera"></summary>
+        <div class="section-body">
+          <div class="toggle-group">
+            <button id="btn-perspective" class="btn-toggle active" data-i18n="perspective"></button>
+            <button id="btn-orthographic" class="btn-toggle" data-i18n="orthographic"></button>
+          </div>
+          <div class="row">
+            <button id="btn-fit" class="btn-small" data-i18n="fitToFrame"></button>
+            <button id="btn-reset-cam" class="btn-small" data-i18n="resetCamera"></button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Lighting -->
+      <details class="panel-section" id="lighting-section">
+        <summary data-i18n="lighting"></summary>
+        <div class="section-body">
+          <label class="checkbox-label">
+            <input type="checkbox" id="chk-custom-light">
+            <span data-i18n="customLight"></span>
+          </label>
+          <div id="light-controls" class="light-controls disabled">
+            <div class="slider-group">
+              <label data-i18n="intensity"></label>
+              <input type="range" id="light-intensity" min="0" max="5" step="0.1" value="1">
+              <span id="intensity-readout">1.0</span>
+            </div>
+            <div class="slider-group">
+              <label>X</label>
+              <input type="range" id="light-x" min="-10" max="10" step="0.5" value="5">
+              <span id="light-x-readout">5.0</span>
+            </div>
+            <div class="slider-group">
+              <label>Y</label>
+              <input type="range" id="light-y" min="-10" max="10" step="0.5" value="10">
+              <span id="light-y-readout">10.0</span>
+            </div>
+            <div class="slider-group">
+              <label>Z</label>
+              <input type="range" id="light-z" min="-10" max="10" step="0.5" value="5">
+              <span id="light-z-readout">5.0</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Material Fixes -->
+      <details class="panel-section" id="material-fixes-section">
+        <summary data-i18n="materialFixes"></summary>
+        <div class="section-body">
+          <small class="form-hint" data-i18n="materialFixesHint"></small>
+          <div class="fix-buttons-grid">
+            <button id="btn-fix-opaque" class="btn-fix" data-i18n="fixForceOpaque"></button>
+            <button id="btn-fix-alpha-clip" class="btn-fix" data-i18n="fixAlphaClip"></button>
+            <button id="btn-fix-single-sided" class="btn-fix" data-i18n="fixSingleSided"></button>
+            <button id="btn-fix-double-sided" class="btn-fix" data-i18n="fixDoubleSided"></button>
+            <button id="btn-fix-flip-normals" class="btn-fix" data-i18n="fixFlipNormals"></button>
+            <button id="btn-fix-recalc-normals" class="btn-fix" data-i18n="fixRecalcNormals"></button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Export Settings -->
+      <details class="panel-section" id="export-section" open>
+        <summary data-i18n="exportSettings"></summary>
+        <div class="section-body">
+          <!-- Animation Selection -->
+          <div class="form-group">
+            <label data-i18n="selectAnimations"></label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="chk-select-all-anims">
+              <span data-i18n="selectAll"></span>
+            </label>
+            <div id="animation-checkboxes" class="checkbox-list"></div>
+          </div>
+
+          <!-- Frame Count Mode -->
+          <div class="form-group">
+            <div class="toggle-group">
+              <button id="btn-mode-frames" class="btn-toggle active" data-i18n="framesPerAnimation"></button>
+              <button id="btn-mode-fps" class="btn-toggle" data-i18n="fpsMode"></button>
+            </div>
+            <div id="frames-input-group">
+              <input type="number" id="frame-count" class="input-number" value="16" min="1" max="128">
+            </div>
+            <div id="fps-input-group" hidden>
+              <input type="number" id="fps-value" class="input-number" value="12" min="1" max="60">
+            </div>
+          </div>
+
+          <!-- Resolution -->
+          <div class="form-group">
+            <label data-i18n="resolution"></label>
+            <select id="resolution-select">
+              <option value="128">128px</option>
+              <option value="256" selected>256px</option>
+              <option value="512">512px</option>
+              <option value="1024">1024px</option>
+            </select>
+          </div>
+
+          <!-- Capture Angles -->
+          <div class="form-group">
+            <label data-i18n="captureAngles"></label>
+            <small class="form-hint" data-i18n="captureAnglesTooltip"></small>
+            <div id="angle-checkboxes" class="checkbox-grid">
+              <label class="checkbox-label"><input type="checkbox" data-angle="0" checked> <span data-i18n="angleFront"></span></label>
+              <label class="checkbox-label"><input type="checkbox" data-angle="45"> <span data-i18n="angleFrontRight"></span></label>
+              <label class="checkbox-label"><input type="checkbox" data-angle="90"> <span data-i18n="angleRight"></span></label>
+              <label class="checkbox-label"><input type="checkbox" data-angle="135"> <span data-i18n="angleBackRight"></span></label>
+              <label class="checkbox-label"><input type="checkbox" data-angle="180"> <span data-i18n="angleBack"></span></label>
+              <label class="checkbox-label"><input type="checkbox" data-angle="225"> <span data-i18n="angleBackLeft"></span></label>
+              <label class="checkbox-label"><input type="checkbox" data-angle="270"> <span data-i18n="angleLeft"></span></label>
+              <label class="checkbox-label"><input type="checkbox" data-angle="315"> <span data-i18n="angleFrontLeft"></span></label>
+            </div>
+          </div>
+
+          <!-- Total Frames -->
+          <div class="info-readout">
+            <span data-i18n="totalFrames"></span>: <strong id="total-frames">16</strong>
+          </div>
+
+          <!-- Background -->
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="chk-transparent" checked>
+              <span data-i18n="transparentBg"></span>
+            </label>
+          </div>
+        </div>
+      </details>
+
+      <!-- Generate -->
+      <div class="generate-section">
+        <button id="btn-generate" class="btn-primary btn-large" disabled data-i18n="generate"></button>
+        <div id="progress-container" hidden>
+          <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <span id="progress-text">0%</span>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Result Modal -->
+  <div id="result-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 data-i18n="result"></h2>
+        <button id="btn-modal-close" class="btn-icon">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Animation tabs -->
+        <div id="result-tabs" class="result-tabs"></div>
+        <!-- Preview -->
+        <div id="result-preview" class="result-preview">
+          <img id="result-image" alt="Sprite sheet">
+        </div>
+        <div id="result-info" class="result-info"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-download-png" class="btn-primary" data-i18n="downloadPNG"></button>
+        <button id="btn-download-zip" class="btn-primary" data-i18n="downloadZIP"></button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
